@@ -20,6 +20,8 @@ import re
 a_line = '--------------------------------------------------------------------------'
 print('ok1')
 
+BASE = 'AUD'
+
 # 24.816454850188563
 # 25.259852574115328
 # top 26
@@ -68,7 +70,7 @@ filter_params['sells'] = 0
 filter_params['cum drawdown'] = 0
 for i in range(res_count):
     # filter = results[i]['profit percent']['EUR'] >= 24.816
-    filter = results[i]['profit percent']['EUR'] >= 25.4
+    filter = results[i]['profit percent'][BASE] >= 5
     #filter = results[i]['profit percent']['USD'] >= 18 # top 103
     #filter = results[i]['profit percent']['USD'] >= 16
     #filter = results[i]['max drawdown']['EUR'] < 1
