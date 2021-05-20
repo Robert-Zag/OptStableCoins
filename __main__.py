@@ -5,15 +5,17 @@ import matplotlib.pyplot as plt
 import math
 import json
 import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
-import threading
+import os
 import sys
 import random
 
 plt.style.use('dark_background')
 from datetime import datetime, timedelta
 
-DIR_NAME = '2021data'
+DIR_NAME = 'all_price_data'
+
+RESULT_DIR = 'results'
+UNSORTED_RESULT_DIR = 'unsortedresults'
 
 FOREX_SYMBOLS = ['EURUSD']
 STABLE_SYMBOLS = ['EURUSDT']
@@ -67,7 +69,7 @@ BUY_DIFFS[1] = [[-0.35], [-0.37],[-0.385], [-0.39], [-0.4], [-0.41], [-0.43], [-
 # BUY_DIFFS[3] = [[-0.4, -0.7, -1.1]]
 
 # standard deviations for entry points
-BUY_STDS = {}
+# BUY_STDS = {}
 # BUY_STDS[1] = [[-2.5], [-2], [-3], [-3.5], [-2.2], [-1.8]]
 # BUY_STDS[2] = [[-2, -3], [-1, -2]]
 # BUY_STDS[3] = [[-1, -2, -3]]
@@ -199,10 +201,11 @@ def get_param_combinations():
 # populates price data dict
 def populate_data_dict():
     data = {}
-    file_path = f'{DIR_NAME}/EURUSD_1m.csv'
-    data['EURUSD'] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
+    for forex_symbol in FOREX_SYMBOLS:
+        file_path = f'{DIR_NAME}/{forex_symbol}.csv'
+        data[forex_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
     for stable_symbol in STABLE_SYMBOLS:
-        file_path = f'{DIR_NAME}/{stable_symbol}_1m.csv'
+        file_path = f'{DIR_NAME}/{stable_symbol}.csv'
         data[stable_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
     return data
 
@@ -379,21 +382,24 @@ def get_results_mp(procnum, return_dict, data, param_list, param_len):
             json.dump(results, result_file, indent=4)
     return_dict[procnum] = result_list
 
+
+def make_dirs():
+    if not os.path.isdir(RESULT_DIR):
+        os.mkdir(RESULT_DIR)
+    if not os.path.isdir(UNSORTED_RESULT_DIR):
+        os.mkdir(UNSORTED_RESULT_DIR)
+
 def main():
     global param_len
+    make_dirs()
     start_time = datetime.now()
     data = add_indicators(populate_data_dict())
     df = data['EURUSDT']
     param_combinations = get_param_combinations()
 
-
-    # param_combinations = [param_combinations[0], param_combinations[100], param_combinations[300], param_combinations[400]]
-
     # randomizing order of params for more even timing
     print(f'Start time: {start_time}')
     random.shuffle(param_combinations)
-
-    #param_combinations = [param_combinations[0], param_combinations[23]]
 
     param_len = len(param_combinations)
     thread_count = MAX_THREADS -2
@@ -401,14 +407,6 @@ def main():
     tests_per_thread = int(math.ceil(tests_per_thread))
     print(f'Running {tests_per_thread} backtests for each of {thread_count} processes\nTotal tests: {len(param_combinations)}')
     param_combination_chunks = [param_combinations[x:x+tests_per_thread] for x in range(0, len(param_combinations), tests_per_thread)]
-
-
-    '''with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(get_results, df, param_chunk) for param_chunk in param_combination_chunks]
-    list_of_result_lists = [f.result() for f in futures]
-    results = [result for result_list in list_of_result_lists for result in result_list]
-    print(len(results))'''
-    #results = get_results(df, param_combinations)
 
     # multiprocessing
     manager = multiprocessing.Manager()

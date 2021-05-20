@@ -12,130 +12,135 @@ from binance.client import Client
 # creates binance api client
 client = Client('', '')
 
-FOREX_DIR = 'forexdata'
-BINANCE_DIR = 'binancedata'
-FNAME_START, FNAME_END = 'DAT_MT_', '_M1_2021'
-FNAME_2020 = 'DAT_MT_EURUSD_M1_2020'
-# hard codes jan to april of 2021 for forex data
-MONTHS_USED = '01 02 03 04'.split()
-DF_COLUMNS = 'date time open high low close volume'.split()
+FOREX_DIR = 'mt_source_data'
+DATA_DIR = 'all_price_data'
+
+DF_COLUMNS = 'datetime open high low close volume'.split()
 # numbered columns will be deleted
 DF_BINANCE_COLUMNS = 'datetime open high low close 0 1 2 3 4 5 6'.split()
 
-FOREX_SYMBOLS = ['EURUSD']
-STABLE_SYMBOLS = ['EURBUSD', 'EURUSDT']
-
-USE_CUSTOM_FOREX_CSV = True
-FILL_GAPS = False
+BASE_ASSETS = ['EUR', 'AUD', 'GBP']
+FOREX_SYMBOLS = [f'{base}USD' for base in BASE_ASSETS]
+STABLE_SYMBOLS = [f'{base}USDT' for base in BASE_ASSETS]
 
 DAYMINS = 1440
 EMA_LENGTHS = (DAYMINS * 3, DAYMINS * 1, DAYMINS * 7)
 
 # backtest params
-# START_LONG = False # too much effort to implement
 START_USD_BALANCE = 100
-# BUY_DIFF = -0.006
-# SELL_DIFF = 0.001
 BUY_DIFF_P = -0.5
 SELL_DIFF_P = -0.1
 # binance fee when using BNB = 0.00075
-FEE = 0.00075
+FEE = 0.001
 
 LINE = '-----------------------------------------------------------------------'
 
-# concats csvs of forex data into a df
+# gets df from csv
 def get_forex_df(symbol):
-    forex_data = []
     # reads 2020 data and drops last column
-    df = pd.read_csv(f'{FOREX_DIR}/{FNAME_2020}.csv', names=DF_COLUMNS).iloc[:, :-1]
-    forex_data.append(df)
-    for month_no in MONTHS_USED:
-        file_name = f'{FNAME_START}{symbol}{FNAME_END}{month_no}.csv'
-        file_path = f'{FOREX_DIR}/{file_name}'
-        if os.path.isfile(file_path):
-            # reads the csv and drops last column
-            df = pd.read_csv(file_path, names=DF_COLUMNS).iloc[:, :-1]
-            forex_data.append(df)
-        else:
-            print(f'No such file "{file_name}"')
-    df = pd.concat(forex_data, ignore_index=True, axis = 0)
-    # refactors index to datetime object
-    # TODO: use parse dates when reading the csvs
-    df['datetime'] = pd.to_datetime(df['date']+' '+df['time'])
+    # df = pd.read_csv(f'{FOREX_DIR}/{symbol}.csv', index_col='date', parse_dates=True)
+    df = pd.read_csv(f'{FOREX_DIR}/{symbol}.csv')
+    df['datetime'] = pd.to_datetime(df['date'])
     df.set_index('datetime', inplace=True)
-    df.drop(['date', 'time'], axis=1, inplace=True)
+    df.drop(['volume', 'date', 'Unnamed: 0'], axis=1, inplace=True)
     # removing rows with duplicate indexes
     df = df.loc[~df.index.duplicated(), :]
     return df
 
 # gets stable coin data from binance
 def get_stable_df(symbol, start, end):
+    print(f'Downloading {symbol} data from binance')
     candles = client.get_historical_klines(symbol, '1m', start, end)
-    df = pd.DataFrame(candles, dtype=float, columns = DF_BINANCE_COLUMNS)
+    df = pd.DataFrame(candles, dtype=float, columns=DF_BINANCE_COLUMNS)
     df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
     df.set_index('datetime', inplace=True)
     # drops columns to match forex dataframe
     df.drop('0 1 2 3 4 5 6'.split(), axis=1, inplace=True)
     return df
 
-# gets start and end timestamps (ms) from the forex data dfs
-def get_start_and_end_ts_ms(forex_df):
-    start = forex_df.index[0].timestamp() * 1000
-    end = forex_df.index[-1].timestamp() * 1000
-    # must be millisecond timestamps TYPE INT for binance api
-    return int(start), int(end)
-
 # checks for data directories
 def make_dirs():
     if not os.path.isdir(FOREX_DIR):
         os.mkdir(FOREX_DIR)
-    if not os.path.isdir(BINANCE_DIR):
-        os.mkdir(BINANCE_DIR)
+    if not os.path.isdir(DATA_DIR):
+        os.mkdir(DATA_DIR)
 
 # populates price data dict
-def populate_data_dict():
-    data = {}
+def populate_data_dict(data):
     for forex_symbol in FOREX_SYMBOLS:
-        file_path = f'{FOREX_DIR}/{forex_symbol}_1m.csv'
+        file_path = f'{DATA_DIR}/{forex_symbol}.csv'
         if not os.path.isfile(file_path):
             data[forex_symbol] = get_forex_df(forex_symbol)
-            data[forex_symbol].to_csv(file_path)
-        elif USE_CUSTOM_FOREX_CSV:
-            data[forex_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
         else:
-            data[forex_symbol] = get_forex_df(forex_symbol)
-    start_ts_ms, end_ts_ms = get_start_and_end_ts_ms(data[FOREX_SYMBOLS[0]])
+            data[forex_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
+    # trims all forex data to have a common start time and a common end time
+    latest_start_time = False
+    earliest_end_time = False
+    for forex_symbol in FOREX_SYMBOLS:
+        if latest_start_time:
+            if latest_start_time < pd.to_datetime(data[forex_symbol].index[0]):
+                latest_start_time = pd.to_datetime(data[forex_symbol].index[0])
+        else:
+            latest_start_time = pd.to_datetime(data[forex_symbol].index[0])
+        if earliest_end_time:
+            if earliest_end_time > pd.to_datetime(data[forex_symbol].index[-1]):
+                earliest_end_time = pd.to_datetime(data[forex_symbol].index[-1])
+        else:
+            earliest_end_time = pd.to_datetime(data[forex_symbol].index[-1])
+    for forex_symbol in FOREX_SYMBOLS:
+        '''
+        reached_first_datetime = False
+        for minute in data[forex_symbol].index:
+            if not reached_first_datetime:
+                if minute < latest_start_time:
+                    data[forex_symbol].drop(minute, inplace=True)
+                else:
+                    reached_first_datetime = True
+        #inverse_df_index = data[forex_symbol].index[::-1]
+        inverse_df = data[forex_symbol].iloc[::-1]
+        exceeded_last_datetime = False
+        for minute in inverse_df.index:
+            if not exceeded_last_datetime:
+                if minute > earliest_end_time:
+                    data[forex_symbol].drop(minute, inplace=True)
+                else:
+                    exceeded_last_datetime = True
+        data[forex_symbol] = inverse_df.iloc[::-1]
+        '''
+        data[forex_symbol] = data[forex_symbol][latest_start_time <= data[forex_symbol].index]
+        data[forex_symbol] = data[forex_symbol][earliest_end_time >= data[forex_symbol].index]
+
+    # getting the start time and end time from forex data into millisecond timestamps
+    start_ts_ms = int(data[FOREX_SYMBOLS[0]].index[0].timestamp() * 1000)
+    end_ts_ms = int(data[FOREX_SYMBOLS[0]].index[-1].timestamp() * 1000)
+    # getting the prices from binance
     for stable_symbol in STABLE_SYMBOLS:
-        file_path = f'{BINANCE_DIR}/{stable_symbol}_1m.csv'
+        file_path = f'{DATA_DIR}/{stable_symbol}.csv'
         # fetches stable coin price data if it is not yet present
         if not os.path.isfile(file_path):
             data[stable_symbol] = get_stable_df(stable_symbol, start_ts_ms, end_ts_ms)
             data[stable_symbol].to_csv(file_path)
         else:
             data[stable_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
-    '''
-    # drops rows from forex df from before stable symbol listing
-    stable_list_first_datetime = data[STABLE_SYMBOLS[0]].index[0]
-    reached_first_datetime = False
-    for datetime in data[FOREX_SYMBOLS[0]].index:
-        if not reached_first_datetime:
-            if datetime <= stable_list_first_datetime:
-                data[FOREX_SYMBOLS[0]].drop(datetime, inplace=True)
-            else:
-                reached_first_datetime = True
-    '''
+    # FILLING GAPS DOESNT WORK FOR SOME REASON
+
+    '''# filling gaps in the forex data
+    for forex_symbol in FOREX_SYMBOLS:
+        last_price_minute = 0
+        for minute in data[STABLE_SYMBOLS[0]].index:
+            if minute in data[forex_symbol].index:
+                last_price_minute = minute
+            # if no price has been found yet, don't fill
+            elif last_price_minute:
+                data[forex_symbol].loc[minute] = data[forex_symbol].loc[last_price_minute]'''
+
+    # saving forex csvs after all these changes are done
+    for forex_symbol in FOREX_SYMBOLS:
+        file_path = f'{DATA_DIR}/{forex_symbol}.csv'
+        if not os.path.isfile(file_path):
+            data[forex_symbol].to_csv(file_path)
     return data
 
-# fills forex close prices during the weekend with last price
-def fill_gaps(data):
-    last_price_minute = 0
-    for minute in data[STABLE_SYMBOLS[0]].index:
-        if minute in data[FOREX_SYMBOLS[0]].index:
-            last_price_minute = minute
-        # if no price has been found yet, don't fill
-        elif last_price_minute:
-            data[FOREX_SYMBOLS[0]].loc[minute] = data[FOREX_SYMBOLS[0]].loc[last_price_minute]
-    return data
 
 # plots price and price difference
 def plot_price_diff(data):
@@ -335,13 +340,13 @@ def backtest(data):
 
 def main():
     make_dirs()
-    data = populate_data_dict()
-    if FILL_GAPS:
-        data = fill_gaps(data)
-    data = plot_price_diff(data)
-    data = populate_trades(data)
-    plot_trades(data)
-    backtest(data)
+    data = {}
+    data = populate_data_dict(data)
+    # this stuff is not updated for this script yet
+    # data = plot_price_diff(data)
+    # data = populate_trades(data)
+    # plot_trades(data)
+    # backtest(data)
 
 if __name__ == '__main__':
     main()
