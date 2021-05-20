@@ -17,8 +17,9 @@ DIR_NAME = 'all_price_data'
 RESULT_DIR = 'results'
 UNSORTED_RESULT_DIR = 'unsortedresults'
 
-FOREX_SYMBOLS = ['EURUSD']
-STABLE_SYMBOLS = ['EURUSDT']
+FOREX_SYMBOLS = ['AUDUSD']
+STABLE_SYMBOLS = ['AUDUSDT']
+BASE = 'AUD'
 
 DAYMINS = 1440
 
@@ -211,10 +212,10 @@ def populate_data_dict():
 
 # adds all possible indicators that the strategy might need
 def add_indicators(data):
-    data['EURUSDT']['diff'] = ((data['EURUSDT']['close'] - data['EURUSD']['close'])/data['EURUSD']['close']) * 100
+    data[f'{BASE}USDT']['diff'] = ((data[f'{BASE}USDT']['close'] - data[f'{BASE}USD']['close'])/data[f'{BASE}USD']['close']) * 100
     for ema_length in EMA_LENGTHS:
-        data['EURUSDT'][f'EMA{ema_length}'] = data['EURUSDT']['diff'].ewm(span=ema_length, adjust=False).mean()
-        data['EURUSDT'][f'STD{ema_length}'] = data['EURUSDT']['diff'].ewm(ema_length).std()
+        data[f'{BASE}USDT'][f'EMA{ema_length}'] = data[f'{BASE}USDT']['diff'].ewm(span=ema_length, adjust=False).mean()
+        data[f'{BASE}USDT'][f'STD{ema_length}'] = data[f'{BASE}USDT']['diff'].ewm(ema_length).std()
     return data
 
 # backtests strategy and returns results
@@ -244,13 +245,13 @@ def backtest(df, params):
     # in order to calculate win rate we will have an additional column
     df['avg buy price'] = np.nan
     df['sell price'] = np.nan
-    df['EUR balance'] = np.nan
+    df[f'{BASE} balance'] = np.nan
     df['USD balance'] = np.nan
     usd_bal = START_USD_BALANCE
     usd_bal_before_any_eur_entries = usd_bal
     eur_start_value = START_USD_BALANCE / df['close'].iloc[0]
     df.iloc[0, df.columns.get_loc('USD balance')] = usd_bal
-    df.iloc[0, df.columns.get_loc('EUR balance')] = eur_start_value
+    df.iloc[0, df.columns.get_loc(f'{BASE} balance')] = eur_start_value
     eur_bal = 0
     # initializing backtest variables
     is_long = [False for i in buy_levels]
@@ -284,7 +285,7 @@ def backtest(df, params):
             usd_bal_before_any_eur_entries = usd_bal
             # all of the money is in usd now, so we write down this balance
             df.loc[minute, 'USD balance'] = usd_bal
-            df.loc[minute, 'EUR balance'] = usd_bal / df.loc[minute, 'close']
+            df.loc[minute, f'{BASE} balance'] = usd_bal / df.loc[minute, 'close']
             # always sell the entire balance
             eur_bal = 0
             sell_count += 1
@@ -316,8 +317,8 @@ def backtest(df, params):
                     if buy_level == 1:
                         first_entry_time = minute
         # balance and drawdown logic
-        if df.loc[minute, 'USD balance'] and df.loc[minute, 'EUR balance']:
-            current_eur_balance = df.loc[minute, 'EUR balance']
+        if df.loc[minute, 'USD balance'] and df.loc[minute, f'{BASE} balance']:
+            current_eur_balance = df.loc[minute, f'{BASE} balance']
             current_usd_balance = df.loc[minute, 'USD balance']
             if max_eur_bal != 0:
                 current_eur_drawdown = ((max_eur_bal - current_eur_balance) / max_eur_bal) * 100
@@ -342,8 +343,8 @@ def backtest(df, params):
         balance_value_usd = eur_bal * df["close"].iloc[-1] + usd_bal
         profit_usd = ((balance_value_usd - START_USD_BALANCE) / START_USD_BALANCE) * 100
         profit_eur = ((balance_value_eur - eur_start_value) / eur_start_value) * 100
-        result['profit percent'] = {'EUR': profit_eur, 'USD': profit_usd}
-        result['max drawdown'] = {'EUR': max_eur_drawdown, 'USD': max_usd_drawdown}
+        result['profit percent'] = {BASE: profit_eur, 'USD': profit_usd}
+        result['max drawdown'] = {BASE: max_eur_drawdown, 'USD': max_usd_drawdown}
         result['trade count'] = {'buys': buy_count, 'sells': sell_count, 'long trades': long_trade_count, 'short trades': short_trade_count}
         result['win rate'] = {'overall': win_rate, 'long wins': long_trade_win_count, 'short wins': short_trade_win_count}
         result['avg duration'] = {'long trade': str(average_long_trade_duration), 'short trade': str(average_short_trade_duration)}
@@ -394,7 +395,7 @@ def main():
     make_dirs()
     start_time = datetime.now()
     data = add_indicators(populate_data_dict())
-    df = data['EURUSDT']
+    df = data[f'{BASE}USDT']
     param_combinations = get_param_combinations()
 
     # randomizing order of params for more even timing
@@ -432,8 +433,8 @@ def main():
         best_profit_index = np.nan
         for i in range(len(results)):
             #print(results[i])
-            if results[i]['profit percent']['EUR'] >= best_profit:
-                best_profit = results[i]['profit percent']['EUR']
+            if results[i]['profit percent'][BASE] >= best_profit:
+                best_profit = results[i]['profit percent'][BASE]
                 best_profit_index = i
         results_sorted.append(results[best_profit_index])
         del results[best_profit_index]
