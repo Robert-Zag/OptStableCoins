@@ -122,9 +122,7 @@ def populate_data_dict(data):
             data[stable_symbol].to_csv(file_path)
         else:
             data[stable_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
-    # FILLING GAPS DOESNT WORK FOR SOME REASON
-
-    '''# filling gaps in the forex data
+    # filling gaps in the forex data
     for forex_symbol in FOREX_SYMBOLS:
         last_price_minute = 0
         for minute in data[STABLE_SYMBOLS[0]].index:
@@ -132,8 +130,8 @@ def populate_data_dict(data):
                 last_price_minute = minute
             # if no price has been found yet, don't fill
             elif last_price_minute:
-                data[forex_symbol].loc[minute] = data[forex_symbol].loc[last_price_minute]'''
-
+                data[forex_symbol].loc[minute] = data[forex_symbol].loc[last_price_minute]
+        data[forex_symbol].sort_index(inplace=True)
     # saving forex csvs after all these changes are done
     for forex_symbol in FOREX_SYMBOLS:
         file_path = f'{DATA_DIR}/{forex_symbol}.csv'
