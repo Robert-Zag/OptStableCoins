@@ -14,12 +14,12 @@ from datetime import datetime, timedelta
 
 DIR_NAME = 'all_price_data'
 
-RESULT_DIR = 'results'
-UNSORTED_RESULT_DIR = 'unsortedresults'
-
 FOREX_SYMBOLS = ['AUDUSD']
 STABLE_SYMBOLS = ['AUDUSDT']
 BASE = 'AUD'
+
+RESULT_DIR = 'results_' + BASE
+UNSORTED_RESULT_DIR = 'unsortedresults_' + BASE
 
 DAYMINS = 1440
 
@@ -58,16 +58,25 @@ BUY_STRATEGIES = ['percent', 'percent off ma', 'std off ma', 'std']'''
 EMA_LENGTHS = [DAYMINS * 3, DAYMINS/2, DAYMINS/4, DAYMINS*7 ]
 
 # sell price parameters
-SELL_DIFFS = [0,0.07, 0.075, 0.08, 0.085, 0.09, 0.0925, 0.095,  0.1, 0.105, 0.11, 0.115, 0.12, 0.125, 0.2, 0.3,0.4,0.5,0.6,0.7]
+# SELL_DIFFS = [0,0.07, 0.075, 0.08, 0.085, 0.09, 0.0925, 0.095,  0.1, 0.105, 0.11, 0.115, 0.12, 0.125, 0.2, 0.3,0.4,0.5,0.6,0.7]
 # SELL_STDS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.2]
 
 BUY_LEVELS = [1]
 
 # percentages
 BUY_DIFFS = {}
-BUY_DIFFS[1] = [[-0.35], [-0.37],[-0.385], [-0.39], [-0.4], [-0.41], [-0.43], [-0.45],  [-0.47],  [-0.49],  [-0.5],  [-0.51],  [-0.53],  [-0.55], [-0.6], [-0.7],[-0.8],[-1]]
+# BUY_DIFFS[1] = [[-0.35], [-0.37],[-0.385], [-0.39], [-0.4], [-0.41], [-0.43], [-0.45],  [-0.47],  [-0.49],  [-0.5],  [-0.51],  [-0.53],  [-0.55], [-0.6], [-0.7],[-0.8],[-1]]
 # BUY_DIFFS[2] = [[-0.4, -1], [-0.5, -1], [-0.5, -0.7], [-0.4, -0.7], [-0.4, -0.5], [-0.7, -0.8]]
 # BUY_DIFFS[3] = [[-0.4, -0.7, -1.1]]
+
+#-----------------------------------------------------------------------------------------------------------------------
+
+b_diffs = list(np.linspace(0, -2, num=41))
+SELL_DIFFS = list(np.linspace(0, 2, num=41))
+
+#-----------------------------------------------------------------------------------------------------------------------
+BUY_DIFFS[1] = [[diff] for diff in b_diffs]
+
 
 # standard deviations for entry points
 # BUY_STDS = {}
@@ -353,22 +362,6 @@ def backtest(df, params):
     return result
 
 # takes in a list of params and returns results
-#def get_results(procnum, return_dict, data, param_list, param_len):
-def get_results(data, param_list):
-    global finished_tests
-    result_list = []
-    for params in param_list:
-        results = backtest(data, params)
-        result_list.append(results)
-        finished_tests += 1
-        sys.stdout.write(f'\rProgress: {finished_tests}/{param_len}, {round(100 * finished_tests/param_len, 2)}%')
-
-        path = f'unsortedresults/result{finished_tests-1}.json'
-        with open(path, 'w') as result_file:
-            json.dump(results, result_file, indent=4)
-    #return_dict[procnum] = result_list
-    return result_list
-
 def get_results_mp(procnum, return_dict, data, param_list, param_len):
     result_list = []
     for params in param_list:
@@ -378,7 +371,7 @@ def get_results_mp(procnum, return_dict, data, param_list, param_len):
         return_dict['count'] = new_count
         sys.stdout.write(f'\rProgress: {new_count}/{param_len}, {round(100 * new_count / param_len, 2)}%')
 
-        path = f'unsortedresults/result{new_count - 1}.json'
+        path = f'{UNSORTED_RESULT_DIR}/result{new_count - 1}.json'
         with open(path, 'w') as result_file:
             json.dump(results, result_file, indent=4)
     return_dict[procnum] = result_list
@@ -441,7 +434,7 @@ def main():
     results = results_sorted
     # outputs best performers
     for i in range(len(results)):
-        path = f'results/result{i}.json'
+        path = f'{RESULT_DIR}/result{i}.json'
         with open(path, 'w') as result_file:
             json.dump(results[i], result_file, indent=4)
     total_time = datetime.now() - start_time
