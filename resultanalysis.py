@@ -11,7 +11,7 @@ import re
 
 a_line = '--------------------------------------------------------------------------'
 
-BASE = 'AUD'
+BASE = 'EUR'
 
 BUY_LEVELS = [1, 2, 3]
 TRADE_STRATEGIES = ['percent', 'percent off ma', 'std', 'std off ma']
@@ -24,13 +24,10 @@ def parse(s):
     return {key: float(val) for key, val in m.groupdict().items()}
 
 # getting the results sorted by EUR profit from their files
-results = []
-result_dir = f'results_{BASE}/'
-file_names = os.listdir(result_dir)
-res_count = len(file_names)
-for i in range(res_count):
-    results.append(json.load(open(f'{result_dir}/result{i}.json')))
-print('ok2')
+
+file_path = f'results_{BASE}.json'
+results = json.load(open(file_path))
+
 # getting stats on tests that pass filter
 filter_count = 0
 filter_params = {}
@@ -48,9 +45,9 @@ filter_params['cum first buy p'] = 0
 filter_params['buys'] = 0
 filter_params['sells'] = 0
 filter_params['cum drawdown'] = 0
-for i in range(res_count):
+for i in range(len(results)):
     # filter = results[i]['profit percent']['EUR'] >= 24.816
-    filter = results[i]['profit percent'][BASE] >= 5
+    # filter = results[i]['profit percent'][BASE] >= 5
     #filter = results[i]['profit percent']['USD'] >= 18 # top 103
     #filter = results[i]['profit percent']['USD'] >= 16
     #filter = results[i]['max drawdown']['EUR'] < 1
@@ -59,6 +56,8 @@ for i in range(res_count):
     #filter = res_e_p[i]['params']['buy strat'] == 'percent'
     #filter = res_e_p[i]['params']['sell strat'] == 'std off ma'
     #filter = timedelta(**parse(res_e_p[i]['backtest duration'])) >= timedelta(minutes = 1)
+    filter = i < 5
+
     if filter:
         filter_count += 1
         filter_params[f"{results[i]['params']['buy strat']}/{results[i]['params']['sell strat']}"] += 1
@@ -73,7 +72,7 @@ for i in range(res_count):
             filter_params['cum sell p'] += results[i]['params']['sell percent']
             filter_params['cum first buy p'] += results[i]['params']['buy percents'][0]
 print(a_line)
-print(f'Out of {res_count}, {filter_count} pass the filter, that\'s {round(100*filter_count/res_count, 2)}%')
+print(f'Out of {len(results)}, {filter_count} pass the filter, that\'s {round(100*filter_count/len(results), 2)}%')
 print(a_line)
 avg_buy_p = filter_params['cum first buy p']/filter_count
 avg_sell_p = filter_params['cum sell p']/filter_count
@@ -113,4 +112,3 @@ print('Stats for buy level amount: ')
 for level_count in BUY_LEVELS:
     level_count_p = round(100 * filter_params[level_count] / filter_count, 2)
     print(f'{level_count} buy level count strategies: {level_count_p}%')
-

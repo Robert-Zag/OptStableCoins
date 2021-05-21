@@ -71,11 +71,14 @@ BUY_DIFFS = {}
 
 #-----------------------------------------------------------------------------------------------------------------------
 
-b_diffs = list(np.linspace(0, -2, num=41))
-SELL_DIFFS = list(np.linspace(0, 2, num=41))
+b_diffs = list(np.linspace(0, -2, num=81))
+s_diffs = list(np.linspace(-1, 1, num=41))
 
 #-----------------------------------------------------------------------------------------------------------------------
-BUY_DIFFS[1] = [[diff] for diff in b_diffs]
+BUY_DIFFS[1] = [[round(diff, 4)] for diff in b_diffs]
+SELL_DIFFS = [round(diff, 4) for diff in s_diffs]
+
+#SELL_DIFFS = [0]
 
 
 # standard deviations for entry points
@@ -378,8 +381,8 @@ def get_results_mp(procnum, return_dict, data, param_list, param_len):
 
 
 def make_dirs():
-    if not os.path.isdir(RESULT_DIR):
-        os.mkdir(RESULT_DIR)
+    '''if not os.path.isdir(RESULT_DIR):
+        os.mkdir(RESULT_DIR)'''
     if not os.path.isdir(UNSORTED_RESULT_DIR):
         os.mkdir(UNSORTED_RESULT_DIR)
 
@@ -418,7 +421,6 @@ def main():
         if key != 'count':
             for result in return_dict[key]:
                 results.append(result)
-
     # sorting results by profits
     results_sorted = []
     while len(results) > 0:
@@ -426,17 +428,16 @@ def main():
         best_profit_index = np.nan
         for i in range(len(results)):
             #print(results[i])
-            if results[i]['profit percent'][BASE] >= best_profit:
-                best_profit = results[i]['profit percent'][BASE]
+            if results[i]['profit percent']['USD'] >= best_profit:
+                best_profit = results[i]['profit percent']['USD']
                 best_profit_index = i
         results_sorted.append(results[best_profit_index])
         del results[best_profit_index]
     results = results_sorted
     # outputs best performers
-    for i in range(len(results)):
-        path = f'{RESULT_DIR}/result{i}.json'
-        with open(path, 'w') as result_file:
-            json.dump(results[i], result_file, indent=4)
+    path = f'{RESULT_DIR}.json'
+    with open(path, 'w') as result_file:
+        json.dump(results, result_file, indent=4)
     total_time = datetime.now() - start_time
     print(f'\nTotal time: {total_time}')
 
