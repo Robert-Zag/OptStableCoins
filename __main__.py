@@ -14,9 +14,9 @@ from datetime import datetime, timedelta
 
 DIR_NAME = 'all_price_data'
 
-FOREX_SYMBOLS = ['AUDUSD']
-STABLE_SYMBOLS = ['AUDUSDT']
-BASE = 'AUD'
+BASE = 'GBP'
+FOREX_SYMBOLS = [f'{BASE}USD']
+STABLE_SYMBOLS = [f'{BASE}USDT']
 
 RESULT_DIR = 'results_' + BASE
 UNSORTED_RESULT_DIR = 'unsortedresults_' + BASE
@@ -72,7 +72,7 @@ BUY_DIFFS = {}
 #-----------------------------------------------------------------------------------------------------------------------
 
 b_diffs = list(np.linspace(0, -2, num=81))
-s_diffs = list(np.linspace(-1, 1, num=41))
+s_diffs = list(np.linspace(-1, 1, num=81))
 
 #-----------------------------------------------------------------------------------------------------------------------
 BUY_DIFFS[1] = [[round(diff, 4)] for diff in b_diffs]
@@ -368,7 +368,10 @@ def backtest(df, params):
 def get_results_mp(procnum, return_dict, data, param_list, param_len):
     result_list = []
     for params in param_list:
-        results = backtest(data, params)
+        if params['buy percents'][0] < params['sell percent']:
+            results = backtest(data, params)
+        else:
+            results = {'infinite loop': True}
         result_list.append(results)
         new_count = return_dict['count'] + 1
         return_dict['count'] = new_count
@@ -399,7 +402,7 @@ def main():
     random.shuffle(param_combinations)
 
     param_len = len(param_combinations)
-    thread_count = MAX_THREADS -2
+    thread_count = MAX_THREADS - 1
     tests_per_thread = len(param_combinations) / thread_count
     tests_per_thread = int(math.ceil(tests_per_thread))
     print(f'Running {tests_per_thread} backtests for each of {thread_count} processes\nTotal tests: {len(param_combinations)}')
@@ -422,18 +425,28 @@ def main():
             for result in return_dict[key]:
                 results.append(result)
     # sorting results by profits
+    results_loops_deleted = []
+    infinite_loops = []
+    for i in range(len(results)):
+        if 'infinite loop' in results[i]:
+            infinite_loops.append(i)
+        else:
+            results_loops_deleted.append(results[i])
+    results = results_loops_deleted
     results_sorted = []
     while len(results) > 0:
         best_profit = -100
         best_profit_index = np.nan
         for i in range(len(results)):
-            #print(results[i])
             if results[i]['profit percent']['USD'] >= best_profit:
                 best_profit = results[i]['profit percent']['USD']
                 best_profit_index = i
         results_sorted.append(results[best_profit_index])
         del results[best_profit_index]
+    for res in results:
+        results_sorted.append(res)
     results = results_sorted
+    results.append({'infinite loop': len(infinite_loops)})
     # outputs best performers
     path = f'{RESULT_DIR}.json'
     with open(path, 'w') as result_file:

@@ -28,6 +28,16 @@ def parse(s):
 file_path = f'results_{BASE}.json'
 results = json.load(open(file_path))
 
+'''# getting the results
+results = []
+result_dir = f'unsortedresults_{BASE}/'
+file_names = os.listdir(result_dir)
+res_count = len(file_names)
+for i in range(res_count):
+    file_path = f'{result_dir}/result{i}.json'
+    print(file_path)
+    results.append(json.load(open(file_path)))'''
+
 # getting stats on tests that pass filter
 filter_count = 0
 filter_params = {}
@@ -46,31 +56,32 @@ filter_params['buys'] = 0
 filter_params['sells'] = 0
 filter_params['cum drawdown'] = 0
 for i in range(len(results)):
-    # filter = results[i]['profit percent']['EUR'] >= 24.816
-    # filter = results[i]['profit percent'][BASE] >= 5
-    #filter = results[i]['profit percent']['USD'] >= 18 # top 103
-    #filter = results[i]['profit percent']['USD'] >= 16
-    #filter = results[i]['max drawdown']['EUR'] < 1
-    #filter = res_e_p[i]['params']['amount buy levels'] > 1
-    #filter = res_e_p[i]['params']['amount buy levels'] == 3
-    #filter = res_e_p[i]['params']['buy strat'] == 'percent'
-    #filter = res_e_p[i]['params']['sell strat'] == 'std off ma'
-    #filter = timedelta(**parse(res_e_p[i]['backtest duration'])) >= timedelta(minutes = 1)
-    filter = i < 5
+    if 'infinite loop' not in results[i]:
+        # filter = results[i]['profit percent']['EUR'] >= 24.816
+        # filter = results[i]['profit percent'][BASE] >= 5
+        #filter = results[i]['profit percent']['USD'] >= 12
+        #filter = results[i]['profit percent']['USD'] >= 16
+        #filter = results[i]['max drawdown']['EUR'] < 1
+        #filter = res_e_p[i]['params']['amount buy levels'] > 1
+        #filter = res_e_p[i]['params']['amount buy levels'] == 3
+        #filter = res_e_p[i]['params']['buy strat'] == 'percent'
+        #filter = res_e_p[i]['params']['sell strat'] == 'std off ma'
+        #filter = timedelta(**parse(res_e_p[i]['backtest duration'])) >= timedelta(minutes = 1)
+        filter = i < 100
 
-    if filter:
-        filter_count += 1
-        filter_params[f"{results[i]['params']['buy strat']}/{results[i]['params']['sell strat']}"] += 1
-        filter_params[f"buy: {results[i]['params']['buy strat']}"] += 1
-        filter_params[f"sell: {results[i]['params']['sell strat']}"] += 1
-        filter_params['cum usd profit'] += results[i]['profit percent']['USD']
-        filter_params[results[i]['params']['amount buy levels']] += 1
-        filter_params['buys'] += results[i]['trade count']['buys']
-        filter_params['sells'] += results[i]['trade count']['sells']
-        filter_params['cum drawdown'] += results[i]['max drawdown']['USD']
-        if results[i]['params']['buy strat'] == 'percent' and results[i]['params']['sell strat'] == 'percent':
-            filter_params['cum sell p'] += results[i]['params']['sell percent']
-            filter_params['cum first buy p'] += results[i]['params']['buy percents'][0]
+        if filter:
+            filter_count += 1
+            filter_params[f"{results[i]['params']['buy strat']}/{results[i]['params']['sell strat']}"] += 1
+            filter_params[f"buy: {results[i]['params']['buy strat']}"] += 1
+            filter_params[f"sell: {results[i]['params']['sell strat']}"] += 1
+            filter_params['cum usd profit'] += results[i]['profit percent']['USD']
+            filter_params[results[i]['params']['amount buy levels']] += 1
+            filter_params['buys'] += results[i]['trade count']['buys']
+            filter_params['sells'] += results[i]['trade count']['sells']
+            filter_params['cum drawdown'] += results[i]['max drawdown']['USD']
+            if results[i]['params']['buy strat'] == 'percent' and results[i]['params']['sell strat'] == 'percent':
+                filter_params['cum sell p'] += results[i]['params']['sell percent']
+                filter_params['cum first buy p'] += results[i]['params']['buy percents'][0]
 print(a_line)
 print(f'Out of {len(results)}, {filter_count} pass the filter, that\'s {round(100*filter_count/len(results), 2)}%')
 print(a_line)

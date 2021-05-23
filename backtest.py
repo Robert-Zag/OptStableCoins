@@ -40,8 +40,11 @@ def get_forex_df(symbol):
     # reads 2020 data and drops last column
     # df = pd.read_csv(f'{FOREX_DIR}/{symbol}.csv', index_col='date', parse_dates=True)
     df = pd.read_csv(f'{FOREX_DIR}/{symbol}.csv')
+    # source data is in utc + 3
     df['datetime'] = pd.to_datetime(df['date'])
     df.set_index('datetime', inplace=True)
+    df = df.tz_localize('Europe/Moscow')
+    df = df.tz_convert("UTC")
     df.drop(['volume', 'date', 'Unnamed: 0'], axis=1, inplace=True)
     # removing rows with duplicate indexes
     df = df.loc[~df.index.duplicated(), :]
@@ -52,8 +55,10 @@ def get_stable_df(symbol, start, end):
     print(f'Downloading {symbol} data from binance')
     candles = client.get_historical_klines(symbol, '1m', start, end)
     df = pd.DataFrame(candles, dtype=float, columns=DF_BINANCE_COLUMNS)
+    # make sure to put this data in the correct timezone
     df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
     df.set_index('datetime', inplace=True)
+    df = df.tz_localize('UTC')
     # drops columns to match forex dataframe
     df.drop('0 1 2 3 4 5 6'.split(), axis=1, inplace=True)
     return df
@@ -73,6 +78,7 @@ def populate_data_dict(data):
             data[forex_symbol] = get_forex_df(forex_symbol)
         else:
             data[forex_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
+            #data[forex_symbol] = data[forex_symbol].tz_localize('UTC')
     # trims all forex data to have a common start time and a common end time
     latest_start_time = False
     earliest_end_time = False
@@ -122,6 +128,7 @@ def populate_data_dict(data):
             data[stable_symbol].to_csv(file_path)
         else:
             data[stable_symbol] = pd.read_csv(file_path, index_col='datetime', parse_dates=True)
+            #data[stable_symbol] = data[stable_symbol].tz_localize('UTC')
     # filling gaps in the forex data
     for forex_symbol in FOREX_SYMBOLS:
         last_price_minute = 0
@@ -150,13 +157,13 @@ def plot_price_diff(data):
     # plots prices on top axis
     data['EURUSD'].plot(y='close', ax=ax1, label='USD', color='b', lw=0.5)
     data['EURUSDT'].plot(y='close', ax=ax1, label='USDT', color='g', lw=0.5)
-    data['EURBUSD'].plot(y='close', ax=ax1, label='BUSD', color='y', lw=0.5)
+    # data['EURBUSD'].plot(y='close', ax=ax1, label='BUSD', color='y', lw=0.5)
     # calculates difference in price
     # data['EURUSDT']['diff'] = data['EURUSDT']['close'] - data['EURUSD']['close']
     # data['EURBUSD']['diff'] = data['EURBUSD']['close'] - data['EURUSD']['close']
     # calculates percentage difference in prices
     data['EURUSDT']['diff'] = ((data['EURUSDT']['close'] - data['EURUSD']['close'])/data['EURUSD']['close']) * 100
-    data['EURBUSD']['diff'] = ((data['EURBUSD']['close'] - data['EURUSD']['close'])/data['EURUSD']['close']) * 100
+    '''data['EURBUSD']['diff'] = ((data['EURBUSD']['close'] - data['EURUSD']['close'])/data['EURUSD']['close']) * 100
     # adding diff movin average and std
     data['EURUSDT']['EMA'] = data['EURUSDT']['diff'].ewm(span=EMA_LENGTHS[2], adjust=False).mean()
     data['EURUSDT']['LOWB'] = data['EURUSDT']['EMA'] - data['EURUSDT']['diff'].ewm(EMA_LENGTHS[2]).std()
@@ -167,7 +174,7 @@ def plot_price_diff(data):
     # plotting mas
     data['EURUSDT'].plot(y='EMA', ax=ax2, label='EMA')
     data['EURUSDT'].plot(y='LOWB', ax=ax2, label='LOWB')
-    data['EURUSDT'].plot(y='HIGHB', ax=ax2, label='HIGHB')
+    data['EURUSDT'].plot(y='HIGHB', ax=ax2, label='HIGHB')'''
     plt.show()
     return data
 
@@ -341,10 +348,13 @@ def main():
     data = {}
     data = populate_data_dict(data)
     # this stuff is not updated for this script yet
-    # data = plot_price_diff(data)
+    data = plot_price_diff(data)
     # data = populate_trades(data)
     # plot_trades(data)
     # backtest(data)
 
 if __name__ == '__main__':
     main()
+'''import pandas
+tz = pandas._libs.tslibs.strptime
+print(tz)'''
