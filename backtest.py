@@ -38,9 +38,10 @@ LINE = '-----------------------------------------------------------------------'
 
 # gets df from csv
 def get_forex_df(symbol):
-    # reads 2020 data and drops last column
     # df = pd.read_csv(f'{FOREX_DIR}/{symbol}.csv', index_col='date', parse_dates=True)
     df = pd.read_csv(f'{FOREX_DIR}/{symbol}.csv')
+    df2 = pd.read_csv(f'{FOREX_DIR_2}/{symbol}.csv')
+    df = pd.concat([df, df2], ignore_index=True, axis=0)
     # source data is in utc + 3
     df['datetime'] = pd.to_datetime(df['date'])
     df.set_index('datetime', inplace=True)
@@ -68,6 +69,8 @@ def get_stable_df(symbol, start, end):
 def make_dirs():
     if not os.path.isdir(FOREX_DIR):
         os.mkdir(FOREX_DIR)
+    if not os.path.isdir(FOREX_DIR_2):
+        os.mkdir(FOREX_DIR_2)
     if not os.path.isdir(DATA_DIR):
         os.mkdir(DATA_DIR)
 
@@ -349,7 +352,7 @@ def main():
     data = {}
     data = populate_data_dict(data)
     # this stuff is not updated for this script yet
-    data = plot_price_diff(data)
+    # data = plot_price_diff(data)
     # data = populate_trades(data)
     # plot_trades(data)
     # backtest(data)
