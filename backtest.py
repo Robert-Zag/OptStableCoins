@@ -13,6 +13,7 @@ from binance.client import Client
 client = Client('', '')
 
 FOREX_DIR = 'mt_source_data'
+FOREX_DIR_2 = 'mt_source_data_2'
 DATA_DIR = 'all_price_data'
 
 DF_COLUMNS = 'datetime open high low close volume'.split()
