@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 DIR_NAME = 'all_price_data'
 
-BASE = 'GBP'
+BASE = 'AUD'
 FOREX_SYMBOLS = [f'{BASE}USD']
 STABLE_SYMBOLS = [f'{BASE}USDT']
 
@@ -55,13 +55,13 @@ BUY_LOTS[2] = [[50, 50], [33, 67], [67, 33], [25, 75], [75, 25], [60, 40], [40, 
 TRADE_STRATEGIES = ['percent', 'percent off ma', 'std off ma', 'std']
 BUY_STRATEGIES = ['percent', 'percent off ma', 'std off ma', 'std']'''
 
-EMA_LENGTHS = [DAYMINS * 3, DAYMINS/2, DAYMINS/4, DAYMINS*7 ]
+EMA_LENGTHS = [DAYMINS * 3, DAYMINS/2, DAYMINS/4, DAYMINS*7]
 
 # sell price parameters
 # SELL_DIFFS = [0,0.07, 0.075, 0.08, 0.085, 0.09, 0.0925, 0.095,  0.1, 0.105, 0.11, 0.115, 0.12, 0.125, 0.2, 0.3,0.4,0.5,0.6,0.7]
 # SELL_STDS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.2]
 
-BUY_LEVELS = [1]
+BUY_LEVELS = [1, 2]
 
 # percentages
 BUY_DIFFS = {}
@@ -71,30 +71,32 @@ BUY_DIFFS = {}
 
 #-----------------------------------------------------------------------------------------------------------------------
 
-b_diffs = list(np.linspace(0, -2, num=81))
-s_diffs = list(np.linspace(-1, 1, num=81))
+b_diffs = list(np.linspace(0, -1, num=21))
+s_diffs = list(np.linspace(-0.5, 0.5, num=21))
 
 #-----------------------------------------------------------------------------------------------------------------------
 BUY_DIFFS[1] = [[round(diff, 4)] for diff in b_diffs]
+BUY_DIFFS[2] = [[-0.4, -1], [-0.3, -1], [-0.3, -0.7], [-0.4, -0.7], [-0.4, -0.5], [-0.7, -0.8]]
 SELL_DIFFS = [round(diff, 4) for diff in s_diffs]
 
-#SELL_DIFFS = [0]
 
 
 # standard deviations for entry points
-# BUY_STDS = {}
-# BUY_STDS[1] = [[-2.5], [-2], [-3], [-3.5], [-2.2], [-1.8]]
-# BUY_STDS[2] = [[-2, -3], [-1, -2]]
+BUY_STDS = {}
+BUY_STDS[1] = [[-2.5], [-2], [-3], [-3.5], [-2.2], [-1.8], [-0.5]]
+BUY_STDS[2] = [[-2, -3], [-1, -2]]
 # BUY_STDS[3] = [[-1, -2, -3]]
 
 # buy lots if there will be multiple entry points
 BUY_LOTS = {}
 BUY_LOTS[1] = [[100]]
-#BUY_LOTS[2] = [[50, 50], [33, 67], [67, 33], [25, 75], [75, 25], [60, 40], [40, 60]]
+BUY_LOTS[2] = [[50, 50], [33, 67], [67, 33], [25, 75], [75, 25], [60, 40], [40, 60]]
 #BUY_LOTS[3] = [[33, 33, 34], [25, 25, 50], [50, 25, 25]]
 
-TRADE_STRATEGIES = ['percent']
-BUY_STRATEGIES = ['percent']
+SELL_STDS = [0.3, 0.4, 0.5, 0.6, 0.7, 1, 1.2, 1.5]
+
+TRADE_STRATEGIES = ['percent', 'percent off ma', 'std', 'std off ma']
+BUY_STRATEGIES = ['percent', 'percent off ma', 'std', 'std off ma']
 
 MAX_THREADS = multiprocessing.cpu_count()
 
@@ -254,17 +256,31 @@ def backtest(df, params):
             df[f'buy signal{buy_level}'] = df['diff'] < df[f'STD{params["ma length"]}'] * params[f'buy stds'][buy_level-1] + df[f'EMA{params["ma length"]}']
         # initialising price columns
         df[f'buy price{buy_level}'] = np.nan
+        df[f'buy price diff index{buy_level}'] = np.nan
     # in order to calculate win rate we will have an additional column
     df['avg buy price'] = np.nan
     df['sell price'] = np.nan
     df[f'{BASE} balance'] = np.nan
     df['USD balance'] = np.nan
     usd_bal = START_USD_BALANCE
-    usd_bal_before_any_eur_entries = usd_bal
+    usd_bal_before_any_buy_entries = usd_bal
     eur_start_value = START_USD_BALANCE / df['close'].iloc[0]
     df.iloc[0, df.columns.get_loc('USD balance')] = usd_bal
     df.iloc[0, df.columns.get_loc(f'{BASE} balance')] = eur_start_value
     eur_bal = 0
+
+    # diff profit index variables
+    df['avg buy price diff index'] = np.nan
+    df['sell price diff index'] = np.nan
+    df['base diff index balance'] = np.nan
+    df['quote diff index balance'] = np.nan
+    quote_diff_index_bal = 100
+    quote_diff_index_bal_before_any_buy_entries = quote_diff_index_bal
+    base_diff_index_start_value = 100 / df['close'].iloc[0]
+    df.iloc[0, df.columns.get_loc('quote diff index balance')] = quote_diff_index_bal
+    df.iloc[0, df.columns.get_loc('base diff index balance')] = base_diff_index_start_value
+    base_diff_index_bal = 0
+
     # initializing backtest variables
     is_long = [False for i in buy_levels]
     buy_count = 0
@@ -290,17 +306,29 @@ def backtest(df, params):
     long_trade_win_count = 0
     for minute in df.index:
         if True in is_long and df.loc[minute, 'sell signal']:
-            df.loc[minute, 'sell price'] = df.loc[minute, 'close'] * (1 - FEE)
             is_long = [False for i in buy_levels]
+
+            df.loc[minute, 'sell price'] = df.loc[minute, 'close'] * (1 - FEE)
+            df.loc[minute, 'sell price diff index'] = (df.loc[minute, 'diff'] + 100) * (1 - FEE)
+
             # balance sell logic
             usd_bal += eur_bal * df.loc[minute, 'sell price']
-            usd_bal_before_any_eur_entries = usd_bal
+            usd_bal_before_any_buy_entries = usd_bal
+
+            quote_diff_index_bal += base_diff_index_bal * df.loc[minute, 'sell price diff index']
+            quote_diff_index_bal_before_any_buy_entries = quote_diff_index_bal
+
             # all of the money is in usd now, so we write down this balance
             df.loc[minute, 'USD balance'] = usd_bal
             df.loc[minute, f'{BASE} balance'] = usd_bal / df.loc[minute, 'close']
             # always sell the entire balance
             eur_bal = 0
             sell_count += 1
+
+            df.loc[minute, 'quote diff index balance'] = quote_diff_index_bal
+            df.loc[minute, 'base diff index balance'] = quote_diff_index_bal / (df.loc[minute, 'diff'] + 100)
+            base_diff_index_bal = 0
+
             # if there was a buy already, calculate trade durations and win rates for both
             if first_entry_time:
                 long_trade_count += 1
@@ -316,13 +344,20 @@ def backtest(df, params):
         elif False in is_long:
             for buy_level in buy_levels:
                 if not is_long[buy_level - 1] and df.loc[minute, f'buy signal{buy_level}']:
-                    buy_lot = params['buy lots'][buy_level - 1] / 100
-                    df.loc[minute, f'buy price{buy_level}'] = df.loc[minute, 'close'] * (1 + FEE)
                     is_long[buy_level - 1] = True
-                    eur_bal += buy_lot * usd_bal_before_any_eur_entries / df.loc[minute, f'buy price{buy_level}']
-                    usd_bal -= buy_lot * usd_bal_before_any_eur_entries
-                    df.loc[minute, 'avg buy price'] = (usd_bal_before_any_eur_entries - usd_bal) / eur_bal
+                    buy_lot = params['buy lots'][buy_level - 1] / 100
+
+                    df.loc[minute, f'buy price{buy_level}'] = df.loc[minute, 'close'] * (1 + FEE)
+                    df.loc[minute, f'buy price diff index{buy_level}'] = (df.loc[minute, 'diff'] + 100) * (1 + FEE)
+
+                    eur_bal += buy_lot * usd_bal_before_any_buy_entries / df.loc[minute, f'buy price{buy_level}']
+                    usd_bal -= buy_lot * usd_bal_before_any_buy_entries
+                    df.loc[minute, 'avg buy price'] = (usd_bal_before_any_buy_entries - usd_bal) / eur_bal
                     buy_count += 1
+
+                    base_diff_index_bal += buy_lot * quote_diff_index_bal_before_any_buy_entries / df.loc[minute, f'buy price diff index{buy_level}']
+                    quote_diff_index_bal -= buy_lot * quote_diff_index_bal_before_any_buy_entries
+
                     # saves timestamp for winrate calculations which are done when selling, since you never know which buy is last
                     last_entry_time = minute
                     # if this is our first buy after a sell
@@ -344,24 +379,28 @@ def backtest(df, params):
                 max_usd_bal = current_usd_balance
             elif current_usd_drawdown > max_usd_drawdown:
                 max_usd_drawdown = current_usd_drawdown
-        win_rate = 0
-        average_long_trade_duration = 0
-        average_short_trade_duration = 0
-        if long_trade_count and short_trade_count:
-            average_long_trade_duration = total_long_time / long_trade_count
-            average_short_trade_duration = total_short_time / short_trade_count
-            win_rate = (long_trade_win_count + short_trade_win_count) / (short_trade_count + long_trade_count) * 100
-        balance_value_eur = usd_bal / df["close"].iloc[-1] + eur_bal
-        balance_value_usd = eur_bal * df["close"].iloc[-1] + usd_bal
-        profit_usd = ((balance_value_usd - START_USD_BALANCE) / START_USD_BALANCE) * 100
-        profit_eur = ((balance_value_eur - eur_start_value) / eur_start_value) * 100
-        result['profit percent'] = {BASE: profit_eur, 'USD': profit_usd}
-        result['max drawdown'] = {BASE: max_eur_drawdown, 'USD': max_usd_drawdown}
-        result['trade count'] = {'buys': buy_count, 'sells': sell_count, 'long trades': long_trade_count, 'short trades': short_trade_count}
-        result['win rate'] = {'overall': win_rate, 'long wins': long_trade_win_count, 'short wins': short_trade_win_count}
-        result['avg duration'] = {'long trade': str(average_long_trade_duration), 'short trade': str(average_short_trade_duration)}
-        backtest_total_time = datetime.now() - backtest_start_time
-        result['backtest duration'] = str(backtest_total_time)
+
+    win_rate = 0
+    average_long_trade_duration = 0
+    average_short_trade_duration = 0
+    if long_trade_count and short_trade_count:
+        average_long_trade_duration = total_long_time / long_trade_count
+        average_short_trade_duration = total_short_time / short_trade_count
+        win_rate = (long_trade_win_count + short_trade_win_count) / (short_trade_count + long_trade_count) * 100
+    balance_value_eur = usd_bal / df["close"].iloc[-1] + eur_bal
+    balance_value_usd = eur_bal * df["close"].iloc[-1] + usd_bal
+    balance_value_quote_index = base_diff_index_bal * (df.loc[minute, 'diff'] + 100) + quote_diff_index_bal
+    profit_usd = ((balance_value_usd - START_USD_BALANCE) / START_USD_BALANCE) * 100
+    profit_eur = ((balance_value_eur - eur_start_value) / eur_start_value) * 100
+    profit_quote_index = balance_value_quote_index - 100
+    result['profit percent'] = {BASE: profit_eur, 'USD': profit_usd, 'quote index': profit_quote_index}
+    result['max drawdown'] = {BASE: max_eur_drawdown, 'USD': max_usd_drawdown}
+    result['trade count'] = {'buys': buy_count, 'sells': sell_count, 'long trades': long_trade_count, 'short trades': short_trade_count}
+    result['win rate'] = {'overall': win_rate, 'long wins': long_trade_win_count, 'short wins': short_trade_win_count}
+    result['avg duration'] = {'long trade': str(average_long_trade_duration), 'short trade': str(average_short_trade_duration)}
+    # saves backtest computation duration
+    backtest_total_time = datetime.now() - backtest_start_time
+    result['backtest duration'] = str(backtest_total_time)
     return result
 
 # takes in a list of params and returns results
@@ -438,13 +477,11 @@ def main():
         best_profit = -100
         best_profit_index = np.nan
         for i in range(len(results)):
-            if results[i]['profit percent']['USD'] >= best_profit:
-                best_profit = results[i]['profit percent']['USD']
+            if results[i]['profit percent']['quote index'] >= best_profit:
+                best_profit = results[i]['profit percent']['quote index']
                 best_profit_index = i
         results_sorted.append(results[best_profit_index])
         del results[best_profit_index]
-    for res in results:
-        results_sorted.append(res)
     results = results_sorted
     results.append({'infinite loop': len(infinite_loops)})
     # outputs best performers

@@ -11,7 +11,7 @@ import re
 
 a_line = '--------------------------------------------------------------------------'
 
-BASE = 'EUR'
+BASE = 'AUD'
 
 BUY_LEVELS = [1, 2, 3]
 TRADE_STRATEGIES = ['percent', 'percent off ma', 'std', 'std off ma']
@@ -67,7 +67,7 @@ for i in range(len(results)):
         #filter = res_e_p[i]['params']['buy strat'] == 'percent'
         #filter = res_e_p[i]['params']['sell strat'] == 'std off ma'
         #filter = timedelta(**parse(res_e_p[i]['backtest duration'])) >= timedelta(minutes = 1)
-        filter = i < 100
+        filter = i < 50
 
         if filter:
             filter_count += 1
