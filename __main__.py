@@ -407,10 +407,12 @@ def backtest(df, params):
 def get_results_mp(procnum, return_dict, data, param_list, param_len):
     result_list = []
     for params in param_list:
-        if params['buy percents'][0] < params['sell percent']:
+        '''if params['buy percents'][0] < params['sell percent']:
             results = backtest(data, params)
         else:
-            results = {'infinite loop': True}
+            results = {'infinite loop': True}'''
+        results = backtest(data, params)
+
         result_list.append(results)
         new_count = return_dict['count'] + 1
         return_dict['count'] = new_count
